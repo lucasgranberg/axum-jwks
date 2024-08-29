@@ -3,7 +3,7 @@ use std::{collections::HashMap, str::FromStr};
 use jsonwebtoken::{
     decode, decode_header,
     jwk::{self, AlgorithmParameters},
-    DecodingKey, TokenData, Validation,
+    Algorithm, DecodingKey, TokenData, Validation,
 };
 use serde::{de::DeserializeOwned, Deserialize};
 use thiserror::Error;
@@ -110,11 +110,18 @@ impl Jwks {
                                 error: err,
                             }
                         })?;
-                    let mut validation = Validation::new(jwk.common.algorithm.or(alg).ok_or(
-                        JwkError::MissingAlgorithm {
-                            key_id: kid.clone(),
-                        },
-                    )?);
+                    let alg = if let Some(key_alg) = jwk.common.key_algorithm {
+                        Algorithm::from_str(key_alg.to_string().as_str())?
+                    } else {
+                        if let Some(alg) = alg {
+                            alg
+                        } else {
+                            return Err(JwksError::KeyError(JwkError::MissingAlgorithm {
+                                key_id: kid.clone(),
+                            }));
+                        }
+                    };
+                    let mut validation = Validation::new(alg);
                     validation.set_audience(&[audience.clone()]);
 
                     keys.insert(
